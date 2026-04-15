@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String?
+  alias       String
+  bio         String?
+  avatarColor String?
+  provider    String   @default("local")
+  role             String    @default("user")
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  deletedAt        DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  posts             Post[]
+  hugs              Hug[]
+  reports           Report[]
+  todayCards        TodayCard[]
+  moodEntries       MoodEntry[]
+  chatSessions      ChatSession[]
+  assessmentResults AssessmentResult[]
+  bookings          Booking[]
+  therapistReviews  TherapistReview[]
+}
+
+model Post {
+  id         String   @id @default(uuid())
+  content    String
+  tag        String
+  visibility String   @default("public")
+  hugCount   Int      @default(0)
+  flagStatus String   @default("clean") // clean | flagged | blocked
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+  createdAt  DateTime @default(now())
+
+  hugs    Hug[]
+  reports Report[] @relation("PostReports")
+
+  @@index([authorId])
+  @@index([createdAt])
+  @@index([tag])
+}
+
+model Hug {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+}
+
+model Report {
+  id         String   @id @default(uuid())
+  targetType String   // post | user
+  targetId   String
+  postId     String?
+  post       Post?    @relation("PostReports", fields: [postId], references: [id])
+  reporterId String
+  reporter   User     @relation(fields: [reporterId], references: [id])
+  reason     String
+  status     String   @default("pending") // pending | reviewed | dismissed
+  createdAt  DateTime @default(now())
+
+  @@index([reporterId])
+  @@index([status])
+}
+
+model TodayQuestion {
+  id       String   @id @default(uuid())
+  question String
+  date     DateTime @unique
+
+  todayCards TodayCard[]
+}
+
+model TodayCard {
+  id         String        @id @default(uuid())
+  answer     String
+  questionId String
+  question   TodayQuestion @relation(fields: [questionId], references: [id])
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  shared     Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+
+  @@unique([questionId, userId])
+  @@index([userId])
+}
+
+model MoodEntry {
+  id        String   @id @default(uuid())
+  mood      String
+  note      String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ChatSession {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  createdAt DateTime      @default(now())
+
+  messages ChatMessage[]
+
+  @@index([userId])
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String      // user | assistant
+  content   String
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId])
+}
+
+model AssessmentQuestion {
+  id    String @id @default(uuid())
+  text  String
+  order Int
+}
+
+model AssessmentResult {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  answers    Json
+  totalScore Int
+  level      String
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Therapist {
+  id           String   @id @default(uuid())
+  name         String
+  title        String
+  specialties  String[]
+  location     String
+  clinic       String
+  pricePerSlot Int
+  avgRating    Float    @default(0)
+  reviewCount  Int      @default(0)
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  timeSlots TimeSlot[]
+  bookings  Booking[]
+  reviews   TherapistReview[]
+}
+
+model TimeSlot {
+  id          String    @id @default(uuid())
+  therapistId String
+  therapist   Therapist @relation(fields: [therapistId], references: [id])
+  date        DateTime
+  startTime   String
+  endTime     String
+  isBooked    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  booking Booking?
+
+  @@unique([therapistId, date, startTime])
+  @@index([therapistId])
+  @@index([date])
+}
+
+model Booking {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  therapistId String
+  therapist   Therapist @relation(fields: [therapistId], references: [id])
+  slotId      String    @unique
+  slot        TimeSlot  @relation(fields: [slotId], references: [id])
+  status      String    @default("confirmed") // confirmed | cancelled
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([therapistId])
+}
+
+model TherapistReview {
+  id          String    @id @default(uuid())
+  therapistId String
+  therapist   Therapist @relation(fields: [therapistId], references: [id])
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  rating      Int
+  comment     String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([therapistId, userId])
+  @@index([therapistId])
+}
