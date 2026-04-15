@@ -14,12 +14,28 @@ export class TodayCardService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const question = await this.prisma.db.todayQuestion.findUnique({
+    // Try exact date first
+    let question = await this.prisma.db.todayQuestion.findUnique({
       where: { date: today },
     });
 
+    // If no question for today, pick one by cycling through all questions
     if (!question) {
-      return { question: null, answer: null };
+      const allQuestions = await this.prisma.db.todayQuestion.findMany({
+        orderBy: { date: 'asc' },
+      });
+
+      if (allQuestions.length === 0) {
+        return { question: null, answer: null };
+      }
+
+      // Use day-of-year to cycle through questions
+      const dayOfYear = Math.floor(
+        (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+      const index = dayOfYear % allQuestions.length;
+      question = allQuestions[index];
     }
 
     const existing = await this.prisma.db.todayCard.findUnique({
@@ -51,12 +67,26 @@ export class TodayCardService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const question = await this.prisma.db.todayQuestion.findUnique({
+    // Same cycling logic
+    let question = await this.prisma.db.todayQuestion.findUnique({
       where: { date: today },
     });
 
     if (!question) {
-      throw new NotFoundException('ไม่มีคำถามวันนี้');
+      const allQuestions = await this.prisma.db.todayQuestion.findMany({
+        orderBy: { date: 'asc' },
+      });
+
+      if (allQuestions.length === 0) {
+        throw new NotFoundException('ไม่มีคำถาม');
+      }
+
+      const dayOfYear = Math.floor(
+        (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+      const index = dayOfYear % allQuestions.length;
+      question = allQuestions[index];
     }
 
     const existing = await this.prisma.db.todayCard.findUnique({
