@@ -11,11 +11,26 @@ async function main() {
   // ==================== Today Card Questions ====================
   const todayQuestions = [
     { question: 'วันนี้มีเรื่องอะไรที่ทำให้คุณยิ้มได้บ้าง?', daysFromNow: 0 },
-    { question: 'ถ้าเขียนจดหมายถึงตัวเองในอนาคต คุณอยากบอกอะไร?', daysFromNow: 1 },
-    { question: 'สิ่งเล็ก ๆ ที่ทำให้คุณรู้สึกขอบคุณในวันนี้คืออะไร?', daysFromNow: 2 },
-    { question: 'ถ้าวันนี้เป็นสีอะไร คุณจะเลือกสีอะไร เพราะอะไร?', daysFromNow: 3 },
-    { question: 'มีใครที่คุณอยากบอกว่า "ขอบคุณ" วันนี้บ้างไหม?', daysFromNow: 4 },
-    { question: 'ถ้าคุณพูดกับตัวเองได้หนึ่งประโยค คุณจะพูดว่าอะไร?', daysFromNow: 5 },
+    {
+      question: 'ถ้าเขียนจดหมายถึงตัวเองในอนาคต คุณอยากบอกอะไร?',
+      daysFromNow: 1,
+    },
+    {
+      question: 'สิ่งเล็ก ๆ ที่ทำให้คุณรู้สึกขอบคุณในวันนี้คืออะไร?',
+      daysFromNow: 2,
+    },
+    {
+      question: 'ถ้าวันนี้เป็นสีอะไร คุณจะเลือกสีอะไร เพราะอะไร?',
+      daysFromNow: 3,
+    },
+    {
+      question: 'มีใครที่คุณอยากบอกว่า "ขอบคุณ" วันนี้บ้างไหม?',
+      daysFromNow: 4,
+    },
+    {
+      question: 'ถ้าคุณพูดกับตัวเองได้หนึ่งประโยค คุณจะพูดว่าอะไร?',
+      daysFromNow: 5,
+    },
   ];
 
   for (const q of todayQuestions) {
@@ -71,10 +86,16 @@ async function main() {
     await prisma.assessmentQuestion.upsert({
       where: { id: `phq9-${i + 1}` },
       update: { text: depressionQuestions[i], order: i + 101 },
-      create: { id: `phq9-${i + 1}`, text: depressionQuestions[i], order: i + 101 },
+      create: {
+        id: `phq9-${i + 1}`,
+        text: depressionQuestions[i],
+        order: i + 101,
+      },
     });
   }
-  console.log(`✅ Depression assessment (PHQ-9): ${depressionQuestions.length} ข้อ`);
+  console.log(
+    `✅ Depression assessment (PHQ-9): ${depressionQuestions.length} ข้อ`,
+  );
 
   await prisma.$disconnect();
   console.log('🎉 Seed complete!');
