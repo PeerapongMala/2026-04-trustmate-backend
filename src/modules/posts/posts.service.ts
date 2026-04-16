@@ -38,6 +38,34 @@ export class PostsService {
     return post;
   }
 
+  async findByUser(userId: string) {
+    const posts = await this.prisma.db.post.findMany({
+      where: { authorId: userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        content: true,
+        tag: true,
+        visibility: true,
+        hugCount: true,
+        createdAt: true,
+        author: {
+          select: { alias: true, avatarColor: true },
+        },
+        hugs: {
+          where: { userId },
+          select: { id: true },
+        },
+      },
+    });
+
+    return posts.map((post) => ({
+      ...post,
+      isHugged: post.hugs.length > 0,
+      hugs: undefined,
+    }));
+  }
+
   async findAll(userId: string, tag?: string, page = 1, limit = 20) {
     const where = {
       flagStatus: 'clean' as const,

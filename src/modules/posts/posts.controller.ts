@@ -24,6 +24,11 @@ export class PostsController {
     return this.postsService.create(userId, dto);
   }
 
+  @Get('me')
+  findMyPosts(@CurrentUser('id') userId: string) {
+    return this.postsService.findByUser(userId);
+  }
+
   @Get()
   findAll(
     @CurrentUser('id') userId: string,

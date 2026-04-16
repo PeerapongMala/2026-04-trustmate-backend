@@ -155,6 +155,35 @@ export class AuthService {
     };
   }
 
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.prisma.db.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.password) {
+      throw new BadRequestException(
+        'บัญชีนี้ไม่สามารถเปลี่ยนรหัสผ่านได้',
+      );
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      throw new UnauthorizedException('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await this.prisma.db.user.update({
+      where: { id: userId },
+      data: { password: hashed },
+    });
+
+    return { message: 'เปลี่ยนรหัสผ่านสำเร็จ' };
+  }
+
   async resetPassword(token: string, newPassword: string) {
     const user = await this.prisma.db.user.findFirst({
       where: {

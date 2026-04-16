@@ -28,6 +28,14 @@ export class UsersService {
     return user;
   }
 
+  async deleteAccount(userId: string) {
+    await this.prisma.db.user.update({
+      where: { id: userId },
+      data: { deletedAt: new Date() },
+    });
+    return { message: 'ลบบัญชีเรียบร้อยแล้ว' };
+  }
+
   async updateProfile(userId: string, dto: UpdateProfileDto) {
     const user = await this.prisma.db.user.update({
       where: { id: userId },
