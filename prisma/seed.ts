@@ -97,6 +97,107 @@ async function main() {
     `✅ Depression assessment (PHQ-9): ${depressionQuestions.length} ข้อ`,
   );
 
+  // ==================== Admin User ====================
+  const bcrypt = await import('bcrypt');
+  const adminPassword = await bcrypt.hash('admin1234', 10);
+  await prisma.user.upsert({
+    where: { email: 'admin@trustmate.app' },
+    update: { role: 'admin' },
+    create: {
+      email: 'admin@trustmate.app',
+      password: adminPassword,
+      alias: 'Admin',
+      role: 'admin',
+    },
+  });
+  console.log('✅ Admin user: admin@trustmate.app / admin1234');
+
+  // ==================== Therapists + Time Slots ====================
+  const therapistsData = [
+    {
+      name: 'พญ. ใจดี สุขสบาย',
+      title: 'จิตแพทย์ทั่วไป',
+      specialties: ['ปัญหาครอบครัว', 'การเลี้ยงลูก', 'ปัญหาวัยรุ่น', 'ปัญหาความสัมพันธ์'],
+      location: 'กรุงเทพฯ',
+      clinic: 'รพ. จิตเวชนครพิงค์',
+      pricePerSlot: 1500,
+      avgRating: 4.8,
+      reviewCount: 24,
+    },
+    {
+      name: 'นพ. สมชาย รักษาใจ',
+      title: 'จิตแพทย์เด็กและวัยรุ่น',
+      specialties: ['ซึมเศร้า', 'วิตกกังวล', 'ADHD', 'ปัญหาการเรียน'],
+      location: 'กรุงเทพฯ',
+      clinic: 'รพ. ศิริราช',
+      pricePerSlot: 2000,
+      avgRating: 4.9,
+      reviewCount: 56,
+    },
+    {
+      name: 'ผศ.ดร. ปรียา จิตวิทยา',
+      title: 'นักจิตวิทยาคลินิก',
+      specialties: ['ความเครียด', 'Burnout', 'ปัญหาการทำงาน', 'CBT'],
+      location: 'เชียงใหม่',
+      clinic: 'คลินิกใจสบาย',
+      pricePerSlot: 1200,
+      avgRating: 4.7,
+      reviewCount: 18,
+    },
+  ];
+
+  for (const t of therapistsData) {
+    // Check if therapist with this name already exists
+    const existing = await prisma.therapist.findFirst({ where: { name: t.name } });
+    const therapist = existing || await prisma.therapist.create({ data: t });
+    if (!existing) {
+      console.log(`✅ Therapist: ${therapist.name}`);
+    } else {
+      console.log(`⏭️  Therapist already exists: ${therapist.name}`);
+    }
+
+    // Create time slots for next 14 days
+    const now = new Date();
+    const timeSlotTemplates = [
+      { startTime: '17:00', endTime: '17:30' },
+      { startTime: '17:30', endTime: '18:00' },
+      { startTime: '18:00', endTime: '18:30' },
+      { startTime: '18:30', endTime: '19:00' },
+      { startTime: '19:00', endTime: '19:30' },
+      { startTime: '19:30', endTime: '20:00' },
+    ];
+
+    let slotCount = 0;
+    for (let dayOffset = 1; dayOffset <= 14; dayOffset++) {
+      const date = new Date(now);
+      date.setDate(date.getDate() + dayOffset);
+      date.setHours(0, 0, 0, 0);
+
+      if (date.getDay() === 0) continue; // Skip Sundays
+
+      for (const ts of timeSlotTemplates) {
+        await prisma.timeSlot.upsert({
+          where: {
+            therapistId_date_startTime: {
+              therapistId: therapist.id,
+              date,
+              startTime: ts.startTime,
+            },
+          },
+          update: {},
+          create: {
+            therapistId: therapist.id,
+            date,
+            startTime: ts.startTime,
+            endTime: ts.endTime,
+          },
+        });
+        slotCount++;
+      }
+    }
+    console.log(`   ${slotCount} time slots`);
+  }
+
   await prisma.$disconnect();
   console.log('🎉 Seed complete!');
 }
