@@ -63,6 +63,11 @@ export class AuthController {
     );
   }
 
+  @Post('google/token')
+  async googleToken(@Body() body: { accessToken: string }) {
+    return this.authService.validateGoogleToken(body.accessToken);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   getMe(@CurrentUser('id') userId: string) {

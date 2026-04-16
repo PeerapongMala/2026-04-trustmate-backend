@@ -70,6 +70,27 @@ export class AuthService {
     return this.generateToken(user.id, user.email, user.role);
   }
 
+  async validateGoogleToken(accessToken: string) {
+    // Fetch user info from Google using the access token
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      throw new UnauthorizedException('Google token ไม่ถูกต้อง');
+    }
+
+    const googleUser = await res.json();
+    if (!googleUser.email) {
+      throw new UnauthorizedException('ไม่สามารถดึงข้อมูลจาก Google ได้');
+    }
+
+    return this.validateGoogleUser({
+      email: googleUser.email,
+      displayName: googleUser.name || '',
+    });
+  }
+
   async validateGoogleUser(profile: { email: string; displayName: string }) {
     let user = await this.prisma.db.user.findUnique({
       where: { email: profile.email },
