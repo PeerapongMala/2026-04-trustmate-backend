@@ -6,7 +6,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: [
+      process.env.FRONTEND_URL || 'http://localhost:3000',
+      'https://trustmate-th.vercel.app',
+      'https://2026-04-trustmate-frontend.vercel.app',
+      'http://localhost:3000',
+    ],
     credentials: true,
   });
 
