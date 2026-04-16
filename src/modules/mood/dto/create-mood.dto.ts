@@ -1,14 +1,14 @@
 import { IsString, IsOptional, IsIn, MaxLength } from 'class-validator';
 
 const VALID_MOODS = [
-  'เบื่อหน่าย',
-  'สับสน',
+  'ลั๊ลลา',
   'ประหลาดใจ',
-  'กลัว',
-  'กังวล',
-  'อาย',
+  'ว้าวุ่น',
+  'วิตกกลัว',
+  'ฉุนเฉียว',
+  'ขยะแขยง',
   'เศร้าซึม',
-  'เปล่าเปลี่ยว',
+  'เบื่อหน่าย',
 ];
 
 export class CreateMoodDto {
