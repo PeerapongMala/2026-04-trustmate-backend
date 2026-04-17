@@ -69,6 +69,7 @@ export class PostsService {
   async findAll(userId: string, tag?: string, page = 1, limit = 20) {
     const where = {
       flagStatus: 'clean' as const,
+      visibility: { not: 'private' },
       ...(tag ? { tag } : {}),
     };
 
