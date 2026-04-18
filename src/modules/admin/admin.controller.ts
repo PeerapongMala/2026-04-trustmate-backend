@@ -39,6 +39,14 @@ export class AdminController {
     );
   }
 
+  @Patch('posts/:id/flag')
+  updatePostFlag(
+    @Param('id') id: string,
+    @Body('flagStatus') flagStatus: 'clean' | 'flagged' | 'blocked',
+  ) {
+    return this.adminService.updatePostFlag(id, flagStatus);
+  }
+
   @Delete('posts/:id')
   deletePost(@Param('id') id: string) {
     return this.adminService.deletePost(id);

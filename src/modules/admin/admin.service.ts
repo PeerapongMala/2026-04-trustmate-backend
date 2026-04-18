@@ -91,6 +91,20 @@ export class AdminService {
     return { data: posts, meta: { total, page, limit } };
   }
 
+  async updatePostFlag(
+    postId: string,
+    flagStatus: 'clean' | 'flagged' | 'blocked',
+  ) {
+    const post = await this.prisma.db.post.findUnique({
+      where: { id: postId },
+    });
+    if (!post) throw new NotFoundException('ไม่พบโพสต์');
+    return this.prisma.db.post.update({
+      where: { id: postId },
+      data: { flagStatus },
+    });
+  }
+
   async deletePost(postId: string) {
     await this.prisma.db.post.delete({ where: { id: postId } });
     return { message: 'ลบโพสต์สำเร็จ' };
