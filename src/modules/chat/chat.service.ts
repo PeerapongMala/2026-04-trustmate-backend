@@ -4,6 +4,27 @@ import { Mistral } from '@mistralai/mistralai';
 import { PrismaService } from '../prisma/prisma.service';
 import { SendMessageDto } from './dto/send-message.dto';
 
+const CRISIS_KEYWORDS = [
+  'อยากตาย', 'ฆ่าตัวตาย', 'ไม่อยากมีชีวิต', 'อยากจบชีวิต',
+  'ไม่อยากอยู่แล้ว', 'ไม่อยากตื่น', 'หมดหวัง', 'ไม่มีทางออก',
+  'กินยาตาย', 'กระโดดตึก', 'แขวนคอ', 'ทำร้ายตัวเอง',
+  'กรีดแขน', 'เชือด', 'suicide',
+];
+
+function detectCrisis(message: string): boolean {
+  const lower = message.toLowerCase();
+  return CRISIS_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+const CRISIS_SYSTEM_ADDENDUM = `
+
+⚠️ ข้อความล่าสุดของผู้ใช้มีสัญญาณวิกฤต — ปฏิบัติตามนี้เคร่งครัด:
+1. รับฟังอย่างจริงใจ ไม่ตัดสิน ไม่เร่ง ไม่สั่งสอน
+2. ระวังเรื่องการใช้คำพูด — ห้ามพูดว่า "ไม่ต้องคิดมาก" "ทุกอย่างจะดีขึ้น" แบบผิวเผิน
+3. ถามว่าตอนนี้ปลอดภัยไหม มีใครอยู่ด้วยไหม
+4. แนะนำสายด่วนสุขภาพจิต 1323 (ตลอด 24 ชม.) ในข้อความตอบเสมอ
+5. ให้เขารู้ว่าเขาไม่ได้อยู่คนเดียว เมทอยู่ตรงนี้`;
+
 const SYSTEM_PROMPT = `คุณชื่อ "เมท" เป็น AI เพื่อนรับฟังของแอป TrustMate
 
 บทบาทหลัก:
@@ -73,9 +94,16 @@ export class ChatService {
       take: 20,
     });
 
+    // Detect crisis keywords
+    const isCrisis = detectCrisis(dto.message);
+
     // Build messages for Mistral
+    const systemContent = isCrisis
+      ? SYSTEM_PROMPT + CRISIS_SYSTEM_ADDENDUM
+      : SYSTEM_PROMPT;
+
     const messages = [
-      { role: 'system' as const, content: SYSTEM_PROMPT },
+      { role: 'system' as const, content: systemContent },
       ...history.map((m) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
@@ -95,8 +123,9 @@ export class ChatService {
         'ขอโทษนะ เมทตอบไม่ได้ตอนนี้ ลองใหม่อีกทีนะ';
     } else {
       // Fallback when no API key
-      assistantContent =
-        'สวัสดีค่ะ เมทอยู่ตรงนี้เพื่อรับฟังคุณนะ ถ้าคุณมีอะไรอยากเล่า เมทพร้อมฟังเสมอเลย 💛';
+      assistantContent = isCrisis
+        ? 'เมทเข้าใจนะว่าตอนนี้มันหนักมาก เมทอยู่ตรงนี้ ถ้าต้องการคนรับฟัง โทรสายด่วนสุขภาพจิต 1323 ได้ตลอด 24 ชม. นะ'
+        : 'สวัสดีค่ะ เมทอยู่ตรงนี้เพื่อรับฟังคุณนะ ถ้าคุณมีอะไรอยากเล่า เมทพร้อมฟังเสมอเลย';
     }
 
     // Save assistant message
@@ -110,6 +139,7 @@ export class ChatService {
 
     return {
       sessionId,
+      isCrisis,
       message: {
         id: saved.id,
         role: saved.role,

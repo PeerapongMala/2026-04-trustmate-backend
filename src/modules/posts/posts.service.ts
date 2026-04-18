@@ -24,11 +24,17 @@ export class PostsService {
       );
     }
 
+    // harm_others → force to private (ไม่ให้คนอื่นกดกอดเป็นการสนับสนุน)
+    let visibility = dto.visibility || 'public';
+    if (modResult.category === 'harm_others') {
+      visibility = 'private';
+    }
+
     const post = await this.prisma.db.post.create({
       data: {
         content: dto.content,
         tag: dto.tag,
-        visibility: dto.visibility || 'public',
+        visibility,
         authorId: userId,
         flagStatus: modResult.status, // clean or flagged
       },
