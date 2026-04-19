@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Mistral } from '@mistralai/mistralai';
 import { PrismaService } from '../prisma/prisma.service';
@@ -71,7 +75,15 @@ export class ChatService {
   async sendMessage(userId: string, dto: SendMessageDto) {
     let sessionId = dto.sessionId;
 
-    if (!sessionId) {
+    if (sessionId) {
+      const session = await this.prisma.db.chatSession.findUnique({
+        where: { id: sessionId },
+        select: { userId: true },
+      });
+      if (!session || session.userId !== userId) {
+        throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงเซสชันนี้');
+      }
+    } else {
       const session = await this.prisma.db.chatSession.create({
         data: { userId },
       });
@@ -163,12 +175,13 @@ export class ChatService {
     });
 
     if (!session) {
-      return [];
+      throw new NotFoundException('ไม่พบเซสชันนี้');
     }
 
     return this.prisma.db.chatMessage.findMany({
       where: { sessionId },
       orderBy: { createdAt: 'asc' },
+      take: 100,
     });
   }
 }

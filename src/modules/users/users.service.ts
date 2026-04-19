@@ -37,9 +37,17 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
+    // Only allow-list mutable fields to prevent accidental write of DTO
+    // additions (e.g., password, role, deletedAt).
+    const data: Partial<Pick<UpdateProfileDto, 'alias' | 'bio' | 'avatarColor'>> =
+      {};
+    if (dto.alias !== undefined) data.alias = dto.alias;
+    if (dto.bio !== undefined) data.bio = dto.bio;
+    if (dto.avatarColor !== undefined) data.avatarColor = dto.avatarColor;
+
     const user = await this.prisma.db.user.update({
       where: { id: userId },
-      data: dto,
+      data,
       select: {
         id: true,
         email: true,

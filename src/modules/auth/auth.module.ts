@@ -12,10 +12,16 @@ import { GoogleStrategy } from './google.strategy';
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: async (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'fallback-secret',
-        signOptions: { expiresIn: 604800 }, // 7 days in seconds
-      }),
+      useFactory: async (config: ConfigService) => {
+        const secret = config.get<string>('JWT_SECRET');
+        if (!secret) {
+          throw new Error('JWT_SECRET environment variable is required');
+        }
+        return {
+          secret,
+          signOptions: { expiresIn: 604800 }, // 7 days in seconds
+        };
+      },
     }),
   ],
   controllers: [AuthController],

@@ -39,8 +39,8 @@ export class PostsController {
     return this.postsService.findAll(
       userId,
       tag,
-      page ? parseInt(page, 10) : 1,
-      limit ? parseInt(limit, 10) : 20,
+      page ? Math.max(parseInt(page, 10) || 1, 1) : 1,
+      limit ? Math.min(parseInt(limit, 10) || 20, 100) : 20,
     );
   }
 

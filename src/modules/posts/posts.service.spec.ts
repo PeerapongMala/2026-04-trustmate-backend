@@ -22,6 +22,7 @@ const mockPrisma = {
     },
     hug: { findUnique: jest.fn(), create: jest.fn(), delete: jest.fn() },
     report: { create: jest.fn() },
+    $transaction: jest.fn((ops) => Promise.all(ops)),
   },
 };
 

@@ -34,8 +34,8 @@ export class AdminController {
   ) {
     return this.adminService.getPosts(
       status,
-      page ? parseInt(page, 10) : 1,
-      limit ? parseInt(limit, 10) : 20,
+      page ? Math.max(parseInt(page, 10) || 1, 1) : 1,
+      limit ? Math.min(parseInt(limit, 10) || 20, 100) : 20,
     );
   }
 
@@ -61,8 +61,8 @@ export class AdminController {
   ) {
     return this.adminService.getReports(
       status || 'pending',
-      page ? parseInt(page, 10) : 1,
-      limit ? parseInt(limit, 10) : 20,
+      page ? Math.max(parseInt(page, 10) || 1, 1) : 1,
+      limit ? Math.min(parseInt(limit, 10) || 20, 100) : 20,
     );
   }
 

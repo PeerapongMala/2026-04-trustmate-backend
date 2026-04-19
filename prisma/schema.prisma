@@ -30,6 +30,20 @@ model User {
   assessmentResults AssessmentResult[]
   bookings          Booking[]
   therapistReviews  TherapistReview[]
+
+  @@index([deletedAt])
+  @@index([resetToken])
+}
+
+model OAuthExchangeCode {
+  code      String   @id
+  userId    String
+  accessToken String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 model Post {
@@ -49,6 +63,7 @@ model Post {
   @@index([authorId])
   @@index([createdAt])
   @@index([tag])
+  @@index([flagStatus, createdAt])
 }
 
 model Hug {

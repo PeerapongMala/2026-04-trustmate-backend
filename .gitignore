@@ -3,4 +3,5 @@ dist
 /generated/prisma
 .env
 .env.*
+!.env.example
 coverage

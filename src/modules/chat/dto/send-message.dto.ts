@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsUUID, MaxLength } from 'class-validator';
 
 export class SendMessageDto {
   @IsString()
@@ -6,6 +6,6 @@ export class SendMessageDto {
   message: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   sessionId?: string;
 }

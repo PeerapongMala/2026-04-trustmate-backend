@@ -44,10 +44,11 @@ export class PostsService {
     return post;
   }
 
-  async findByUser(userId: string) {
+  async findByUser(userId: string, limit = 50) {
     const posts = await this.prisma.db.post.findMany({
       where: { authorId: userId },
       orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 100),
       select: {
         id: true,
         content: true,
@@ -131,14 +132,13 @@ export class PostsService {
       return { message: 'กอดแล้ว' };
     }
 
-    await this.prisma.db.hug.create({
-      data: { postId, userId },
-    });
-
-    await this.prisma.db.post.update({
-      where: { id: postId },
-      data: { hugCount: { increment: 1 } },
-    });
+    await this.prisma.db.$transaction([
+      this.prisma.db.hug.create({ data: { postId, userId } }),
+      this.prisma.db.post.update({
+        where: { id: postId },
+        data: { hugCount: { increment: 1 } },
+      }),
+    ]);
 
     return { message: 'กอดสำเร็จ' };
   }
@@ -152,14 +152,13 @@ export class PostsService {
       return { message: 'ยังไม่ได้กอด' };
     }
 
-    await this.prisma.db.hug.delete({
-      where: { id: existing.id },
-    });
-
-    await this.prisma.db.post.update({
-      where: { id: postId },
-      data: { hugCount: { decrement: 1 } },
-    });
+    await this.prisma.db.$transaction([
+      this.prisma.db.hug.delete({ where: { id: existing.id } }),
+      this.prisma.db.post.update({
+        where: { id: postId },
+        data: { hugCount: { decrement: 1 } },
+      }),
+    ]);
 
     return { message: 'ยกเลิกกอดสำเร็จ' };
   }

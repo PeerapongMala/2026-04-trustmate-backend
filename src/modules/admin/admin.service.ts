@@ -82,7 +82,7 @@ export class AdminService {
         skip: (page - 1) * limit,
         take: limit,
         include: {
-          author: { select: { alias: true, email: true } },
+          author: { select: { alias: true } },
         },
       }),
       this.prisma.db.post.count({ where }),

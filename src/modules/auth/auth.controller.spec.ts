@@ -20,6 +20,9 @@ const mockAuthService = {
   forgotPassword: jest.fn(),
   resetPassword: jest.fn(),
   validateGoogleUser: jest.fn(),
+  validateGoogleToken: jest.fn(),
+  createExchangeCode: jest.fn(),
+  exchangeCode: jest.fn(),
   getMe: jest.fn(),
 };
 
@@ -178,9 +181,10 @@ describe('AuthController', () => {
 
   // ==================== googleCallback ====================
   describe('googleCallback', () => {
-    it('should redirect to frontend with token after Google login', async () => {
+    it('should redirect to frontend with short-lived exchange code (not JWT)', async () => {
       const mockResult = { accessToken: 'google-jwt-token', userId: 'user-1' };
       mockAuthService.validateGoogleUser.mockResolvedValue(mockResult);
+      mockAuthService.createExchangeCode.mockResolvedValue('short-code-123');
       mockConfigService.get.mockReturnValue('http://localhost:3000');
 
       const mockReq = {
@@ -193,9 +197,17 @@ describe('AuthController', () => {
       expect(mockAuthService.validateGoogleUser).toHaveBeenCalledWith(
         mockReq.user,
       );
-      expect(mockRes.redirect).toHaveBeenCalledWith(
-        `http://localhost:3000/auth/google/callback?token=google-jwt-token`,
+      expect(mockAuthService.createExchangeCode).toHaveBeenCalledWith(
+        'google-jwt-token',
+        'user-1',
       );
+      expect(mockRes.redirect).toHaveBeenCalledWith(
+        'http://localhost:3000/auth/google/callback?code=short-code-123',
+      );
+      // Critical: JWT must NOT appear in the redirect URL
+      const redirectUrl = mockRes.redirect.mock.calls[0][0];
+      expect(redirectUrl).not.toContain('google-jwt-token');
+      expect(redirectUrl).not.toContain('token=');
     });
 
     it('should use fallback frontend URL when config returns undefined', async () => {
@@ -203,6 +215,7 @@ describe('AuthController', () => {
         accessToken: 'token-123',
         userId: 'user-2',
       });
+      mockAuthService.createExchangeCode.mockResolvedValue('code-abc');
       mockConfigService.get.mockReturnValue(undefined);
 
       const mockReq = {
@@ -213,8 +226,23 @@ describe('AuthController', () => {
       await controller.googleCallback(mockReq as any, mockRes as any);
 
       expect(mockRes.redirect).toHaveBeenCalledWith(
-        `http://localhost:3000/auth/google/callback?token=token-123`,
+        'http://localhost:3000/auth/google/callback?code=code-abc',
       );
+    });
+  });
+
+  // ==================== googleExchange ====================
+  describe('googleExchange', () => {
+    it('should delegate to authService.exchangeCode', async () => {
+      mockAuthService.exchangeCode.mockResolvedValue({
+        accessToken: 'jwt-out',
+        userId: 'u-1',
+      });
+
+      const result = await controller.googleExchange({ code: 'c-1' });
+
+      expect(result).toEqual({ accessToken: 'jwt-out', userId: 'u-1' });
+      expect(mockAuthService.exchangeCode).toHaveBeenCalledWith('c-1');
     });
   });
 

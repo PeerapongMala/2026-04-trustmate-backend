@@ -24,6 +24,11 @@ const mockPrisma = {
       create: jest.fn(),
       update: jest.fn(),
     },
+    oAuthExchangeCode: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
   },
 };
 
@@ -260,6 +265,95 @@ describe('AuthService', () => {
         }),
       );
     });
+
+    it('should store a SHA-256 hash of the reset token, never the raw token', async () => {
+      mockPrisma.db.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        provider: 'local',
+      });
+      mockPrisma.db.user.update.mockResolvedValue({});
+
+      await service.forgotPassword('user@test.com');
+
+      const storedToken =
+        mockPrisma.db.user.update.mock.calls[0][0].data.resetToken;
+      // SHA-256 hex = 64 chars, only [0-9a-f]
+      expect(storedToken).toMatch(/^[0-9a-f]{64}$/);
+    });
+  });
+
+  // ==================== Exchange Code (OAuth) ====================
+  describe('createExchangeCode / exchangeCode', () => {
+    it('createExchangeCode should persist a 64-char hex code with 60s expiry', async () => {
+      mockPrisma.db.oAuthExchangeCode.create.mockResolvedValue({});
+
+      const code = await service.createExchangeCode('jwt-xyz', 'user-1');
+
+      expect(code).toMatch(/^[0-9a-f]{64}$/);
+      const call = mockPrisma.db.oAuthExchangeCode.create.mock.calls[0][0];
+      expect(call.data.accessToken).toBe('jwt-xyz');
+      expect(call.data.userId).toBe('user-1');
+      const deltaMs = call.data.expiresAt.getTime() - Date.now();
+      expect(deltaMs).toBeGreaterThan(50_000);
+      expect(deltaMs).toBeLessThanOrEqual(60_000);
+    });
+
+    it('exchangeCode should throw when code not found', async () => {
+      mockPrisma.db.oAuthExchangeCode.findUnique.mockResolvedValue(null);
+
+      await expect(service.exchangeCode('nope')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('exchangeCode should throw when code already used', async () => {
+      mockPrisma.db.oAuthExchangeCode.findUnique.mockResolvedValue({
+        code: 'c1',
+        accessToken: 'jwt',
+        userId: 'u1',
+        usedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
+      await expect(service.exchangeCode('c1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('exchangeCode should throw when code expired', async () => {
+      mockPrisma.db.oAuthExchangeCode.findUnique.mockResolvedValue({
+        code: 'c1',
+        accessToken: 'jwt',
+        userId: 'u1',
+        usedAt: null,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      await expect(service.exchangeCode('c1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('exchangeCode should mark as used and return the stored JWT', async () => {
+      mockPrisma.db.oAuthExchangeCode.findUnique.mockResolvedValue({
+        code: 'c1',
+        accessToken: 'jwt-value',
+        userId: 'user-99',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      mockPrisma.db.oAuthExchangeCode.update.mockResolvedValue({});
+
+      const result = await service.exchangeCode('c1');
+
+      expect(result).toEqual({ accessToken: 'jwt-value', userId: 'user-99' });
+      expect(mockPrisma.db.oAuthExchangeCode.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { code: 'c1' },
+          data: { usedAt: expect.any(Date) },
+        }),
+      );
+    });
   });
 
   // ==================== Reset Password ====================
@@ -272,10 +366,23 @@ describe('AuthService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('should look up by hashed token, not raw token (plaintext-token attack defense)', async () => {
+      mockPrisma.db.user.findFirst.mockResolvedValue(null);
+
+      await service
+        .resetPassword('raw-token-abc', 'newpass123')
+        .catch(() => undefined);
+
+      const whereArg = mockPrisma.db.user.findFirst.mock.calls[0][0].where;
+      expect(whereArg.resetToken).not.toBe('raw-token-abc');
+      // It must be the SHA-256 hex digest of 'raw-token-abc'
+      expect(whereArg.resetToken).toMatch(/^[0-9a-f]{64}$/);
+    });
+
     it('should update password and clear reset token', async () => {
       mockPrisma.db.user.findFirst.mockResolvedValue({
         id: 'user-1',
-        resetToken: 'valid-token',
+        resetToken: 'hashed-in-db',
         resetTokenExpiry: new Date(Date.now() + 3600000),
       });
       mockPrisma.db.user.update.mockResolvedValue({});
@@ -402,6 +509,114 @@ describe('AuthService', () => {
 
       expect(result).toEqual(googleUser);
       expect(result?.provider).toBe('google');
+    });
+  });
+
+  // ==================== changePassword ====================
+  describe('changePassword', () => {
+    it('should throw BadRequestException when user has no password (Google account)', async () => {
+      mockPrisma.db.user.findUnique.mockResolvedValue({
+        id: 'u-1',
+        password: null,
+      });
+
+      await expect(
+        service.changePassword('u-1', 'old', 'new-password'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw UnauthorizedException when current password is wrong', async () => {
+      const hashed = await bcrypt.hash('correctPass', 10);
+      mockPrisma.db.user.findUnique.mockResolvedValue({
+        id: 'u-1',
+        password: hashed,
+      });
+
+      await expect(
+        service.changePassword('u-1', 'wrongPass', 'new-password'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should hash new password with bcrypt cost 12 and persist', async () => {
+      const hashedOld = await bcrypt.hash('oldPass', 10);
+      mockPrisma.db.user.findUnique.mockResolvedValue({
+        id: 'u-1',
+        password: hashedOld,
+      });
+      mockPrisma.db.user.update.mockResolvedValue({});
+
+      const result = await service.changePassword(
+        'u-1',
+        'oldPass',
+        'brandNewPass',
+      );
+
+      expect(result).toHaveProperty('message');
+      const updateCall = mockPrisma.db.user.update.mock.calls[0][0];
+      expect(updateCall.data.password).not.toBe('brandNewPass');
+      // Verify it's a bcrypt hash (starts with $2)
+      expect(updateCall.data.password).toMatch(/^\$2[aby]\$/);
+    });
+
+    it('should throw BadRequestException when user missing entirely', async () => {
+      mockPrisma.db.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.changePassword('nope', 'old', 'new'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ==================== validateGoogleToken ====================
+  describe('validateGoogleToken', () => {
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('should throw UnauthorizedException when Google returns non-ok', async () => {
+      global.fetch = jest.fn().mockResolvedValue({ ok: false });
+
+      await expect(service.validateGoogleToken('bad-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('should throw UnauthorizedException when response missing email', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ name: 'Alice' }),
+      });
+
+      await expect(service.validateGoogleToken('token')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('should create user and return token when email is present', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ email: 'a@b.com', name: 'Alice' }),
+      });
+      mockPrisma.db.user.findUnique.mockResolvedValue(null);
+      mockPrisma.db.user.create.mockResolvedValue({
+        id: 'u-new',
+        email: 'a@b.com',
+        role: 'user',
+      });
+
+      const result = await service.validateGoogleToken('valid-token');
+
+      expect(result).toHaveProperty('accessToken');
+      expect(mockPrisma.db.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            email: 'a@b.com',
+            provider: 'google',
+          }),
+        }),
+      );
     });
   });
 });

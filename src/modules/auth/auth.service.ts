@@ -122,11 +122,15 @@ export class AuthService {
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedResetToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
     const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await this.prisma.db.user.update({
       where: { id: user.id },
-      data: { resetToken, resetTokenExpiry },
+      data: { resetToken: hashedResetToken, resetTokenExpiry },
     });
 
     const frontendUrl =
@@ -165,9 +169,7 @@ export class AuthService {
     });
 
     if (!user || !user.password) {
-      throw new BadRequestException(
-        'บัญชีนี้ไม่สามารถเปลี่ยนรหัสผ่านได้',
-      );
+      throw new BadRequestException('บัญชีนี้ไม่สามารถเปลี่ยนรหัสผ่านได้');
     }
 
     const isValid = await bcrypt.compare(currentPassword, user.password);
@@ -185,9 +187,10 @@ export class AuthService {
   }
 
   async resetPassword(token: string, newPassword: string) {
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
     const user = await this.prisma.db.user.findFirst({
       where: {
-        resetToken: token,
+        resetToken: hashedToken,
         resetTokenExpiry: { gt: new Date() },
       },
     });
@@ -208,6 +211,34 @@ export class AuthService {
     });
 
     return { message: 'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบใหม่' };
+  }
+
+  async createExchangeCode(accessToken: string, userId: string): Promise<string> {
+    const code = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 1000); // 60 seconds
+
+    await this.prisma.db.oAuthExchangeCode.create({
+      data: { code, userId, accessToken, expiresAt },
+    });
+
+    return code;
+  }
+
+  async exchangeCode(code: string) {
+    const record = await this.prisma.db.oAuthExchangeCode.findUnique({
+      where: { code },
+    });
+
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new BadRequestException('Exchange code ไม่ถูกต้องหรือหมดอายุแล้ว');
+    }
+
+    await this.prisma.db.oAuthExchangeCode.update({
+      where: { code },
+      data: { usedAt: new Date() },
+    });
+
+    return { accessToken: record.accessToken, userId: record.userId };
   }
 
   async getMe(userId: string) {

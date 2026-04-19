@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -24,7 +25,13 @@ export class BookingService {
   }
 
   async getSlots(therapistId: string, date: string) {
+    if (!date || !/^\d{4}-\d{2}-\d{2}/.test(date)) {
+      throw new BadRequestException('รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)');
+    }
     const targetDate = new Date(date);
+    if (Number.isNaN(targetDate.getTime())) {
+      throw new BadRequestException('วันที่ไม่ถูกต้อง');
+    }
     targetDate.setHours(0, 0, 0, 0);
 
     return this.prisma.db.timeSlot.findMany({
@@ -56,40 +63,42 @@ export class BookingService {
   }
 
   async createBooking(userId: string, dto: CreateBookingDto) {
-    const slot = await this.prisma.db.timeSlot.findUnique({
-      where: { id: dto.slotId },
-    });
+    // Interactive transaction — re-check slot inside the tx to avoid TOCTOU race.
+    // Guarding with where: { isBooked: false } makes the update a no-op if another
+    // request won the race, so we detect it by inspecting updated row count.
+    return this.prisma.db.$transaction(async (tx) => {
+      const slot = await tx.timeSlot.findUnique({
+        where: { id: dto.slotId },
+      });
 
-    if (!slot) {
-      throw new NotFoundException('ไม่พบช่วงเวลาที่เลือก');
-    }
+      if (!slot) {
+        throw new NotFoundException('ไม่พบช่วงเวลาที่เลือก');
+      }
 
-    if (slot.isBooked) {
-      throw new ConflictException('ช่วงเวลานี้ถูกจองแล้ว');
-    }
+      const updated = await tx.timeSlot.updateMany({
+        where: { id: dto.slotId, isBooked: false },
+        data: { isBooked: true },
+      });
 
-    // Use transaction to prevent race condition
-    const [booking] = await this.prisma.db.$transaction([
-      this.prisma.db.booking.create({
+      if (updated.count === 0) {
+        throw new ConflictException('ช่วงเวลานี้ถูกจองแล้ว');
+      }
+
+      return tx.booking.create({
         data: {
           userId,
           therapistId: dto.therapistId,
           slotId: dto.slotId,
         },
-      }),
-      this.prisma.db.timeSlot.update({
-        where: { id: dto.slotId },
-        data: { isBooked: true },
-      }),
-    ]);
-
-    return booking;
+      });
+    });
   }
 
-  async getMyBookings(userId: string) {
+  async getMyBookings(userId: string, limit = 50) {
     return this.prisma.db.booking.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 100),
       include: {
         therapist: {
           select: { name: true, title: true, clinic: true, location: true },
@@ -137,25 +146,26 @@ export class BookingService {
       throw new ConflictException('คุณรีวิวผู้ให้คำปรึกษาท่านนี้แล้ว');
     }
 
-    const review = await this.prisma.db.therapistReview.create({
-      data: { therapistId, userId, rating: dto.rating, comment: dto.comment },
-    });
+    return this.prisma.db.$transaction(async (tx) => {
+      const review = await tx.therapistReview.create({
+        data: { therapistId, userId, rating: dto.rating, comment: dto.comment },
+      });
 
-    // Update average rating
-    const agg = await this.prisma.db.therapistReview.aggregate({
-      where: { therapistId },
-      _avg: { rating: true },
-      _count: { rating: true },
-    });
+      const agg = await tx.therapistReview.aggregate({
+        where: { therapistId },
+        _avg: { rating: true },
+        _count: { rating: true },
+      });
 
-    await this.prisma.db.therapist.update({
-      where: { id: therapistId },
-      data: {
-        avgRating: agg._avg.rating || 0,
-        reviewCount: agg._count.rating,
-      },
-    });
+      await tx.therapist.update({
+        where: { id: therapistId },
+        data: {
+          avgRating: agg._avg.rating || 0,
+          reviewCount: agg._count.rating,
+        },
+      });
 
-    return review;
+      return review;
+    });
   }
 }
