@@ -2,6 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Mistral } from '@mistralai/mistralai';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  paginationArgs,
+  paginationMeta,
+} from '../../common/utils/pagination';
 
 const MODERATION_PROMPT = `คุณเป็นระบบตรวจสอบเนื้อหาของแอปสุขภาพจิต TrustMate
 ตรวจสอบข้อความต่อไปนี้ว่าเข้าข่ายผิดกฎหรือไม่
@@ -79,8 +83,7 @@ export class AdminService {
       this.prisma.db.post.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        ...paginationArgs(page, limit),
         include: {
           author: { select: { alias: true } },
         },
@@ -88,7 +91,7 @@ export class AdminService {
       this.prisma.db.post.count({ where }),
     ]);
 
-    return { data: posts, meta: { total, page, limit } };
+    return { data: posts, meta: paginationMeta(total, page, limit) };
   }
 
   async updatePostFlag(
@@ -117,8 +120,7 @@ export class AdminService {
       this.prisma.db.report.findMany({
         where: { status },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        ...paginationArgs(page, limit),
         include: {
           reporter: { select: { alias: true } },
           post: { select: { content: true, tag: true } },
@@ -127,7 +129,7 @@ export class AdminService {
       this.prisma.db.report.count({ where: { status } }),
     ]);
 
-    return { data: reports, meta: { total, page, limit } };
+    return { data: reports, meta: paginationMeta(total, page, limit) };
   }
 
   async reviewReport(reportId: string, action: 'reviewed' | 'dismissed') {

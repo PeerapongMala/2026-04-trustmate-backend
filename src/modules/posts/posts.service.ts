@@ -6,6 +6,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminService } from '../admin/admin.service';
 import { CreatePostDto } from './dto/create-post.dto';
+import {
+  paginationArgs,
+  paginationMeta,
+} from '../../common/utils/pagination';
 
 @Injectable()
 export class PostsService {
@@ -84,8 +88,7 @@ export class PostsService {
       this.prisma.db.post.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        ...paginationArgs(page, limit),
         select: {
           id: true,
           content: true,
@@ -111,7 +114,7 @@ export class PostsService {
         isHugged: post.hugs.length > 0,
         hugs: undefined,
       })),
-      meta: { total, page, limit },
+      meta: paginationMeta(total, page, limit),
     };
   }
 

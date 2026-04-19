@@ -117,7 +117,12 @@ async function main() {
     {
       name: 'พญ. ใจดี สุขสบาย',
       title: 'จิตแพทย์ทั่วไป',
-      specialties: ['ปัญหาครอบครัว', 'การเลี้ยงลูก', 'ปัญหาวัยรุ่น', 'ปัญหาความสัมพันธ์'],
+      specialties: [
+        'ปัญหาครอบครัว',
+        'การเลี้ยงลูก',
+        'ปัญหาวัยรุ่น',
+        'ปัญหาความสัมพันธ์',
+      ],
       location: 'กรุงเทพฯ',
       clinic: 'รพ. จิตเวชนครพิงค์',
       pricePerSlot: 1500,
@@ -148,8 +153,10 @@ async function main() {
 
   for (const t of therapistsData) {
     // Check if therapist with this name already exists
-    const existing = await prisma.therapist.findFirst({ where: { name: t.name } });
-    const therapist = existing || await prisma.therapist.create({ data: t });
+    const existing = await prisma.therapist.findFirst({
+      where: { name: t.name },
+    });
+    const therapist = existing || (await prisma.therapist.create({ data: t }));
     if (!existing) {
       console.log(`✅ Therapist: ${therapist.name}`);
     } else {

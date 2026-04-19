@@ -1,5 +1,5 @@
-import { Controller, Get, Post } from '@nestjs/common';
-import { PrismaService } from './modules/prisma/prisma.service';
+import { Controller, ForbiddenException, Get, Post } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
 @Controller('health')
@@ -13,6 +13,12 @@ export class HealthController {
 
   @Post('seed')
   async seed() {
+    // Dev-only endpoint. Creates an admin account with a well-known
+    // password; must never be reachable in production.
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('Seed endpoint disabled in production');
+    }
+
     const results: string[] = [];
 
     // Admin user
@@ -34,7 +40,12 @@ export class HealthController {
       {
         name: 'พญ. ใจดี สุขสบาย',
         title: 'จิตแพทย์ทั่วไป',
-        specialties: ['ปัญหาครอบครัว', 'การเลี้ยงลูก', 'ปัญหาวัยรุ่น', 'ปัญหาความสัมพันธ์'],
+        specialties: [
+          'ปัญหาครอบครัว',
+          'การเลี้ยงลูก',
+          'ปัญหาวัยรุ่น',
+          'ปัญหาความสัมพันธ์',
+        ],
         location: 'กรุงเทพฯ',
         clinic: 'รพ. จิตเวชนครพิงค์',
         pricePerSlot: 1500,
@@ -64,8 +75,11 @@ export class HealthController {
     ];
 
     for (const t of therapistsData) {
-      const existing = await this.prisma.db.therapist.findFirst({ where: { name: t.name } });
-      const therapist = existing || await this.prisma.db.therapist.create({ data: t });
+      const existing = await this.prisma.db.therapist.findFirst({
+        where: { name: t.name },
+      });
+      const therapist =
+        existing || (await this.prisma.db.therapist.create({ data: t }));
       results.push(`Therapist: ${therapist.name} (${therapist.id})`);
 
       // Time slots for next 14 days
