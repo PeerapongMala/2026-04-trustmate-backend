@@ -22,6 +22,8 @@ export class CreatePostDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['public', 'anonymous', 'private'], { message: 'visibility ไม่ถูกต้อง' })
+  @IsIn(['public', 'anonymous', 'private'], {
+    message: 'visibility ไม่ถูกต้อง',
+  })
   visibility?: string;
 }
